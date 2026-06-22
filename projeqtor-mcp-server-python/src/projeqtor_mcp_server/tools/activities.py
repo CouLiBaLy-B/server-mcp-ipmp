@@ -12,7 +12,7 @@ from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe
 def register_activity_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
     """Register activity and planning tools."""
 
-    @mcp.tool(description="Lister les activités d'un projet avec filtres optionnels statut et ressource responsable.")
+    @mcp.tool(description="Lister les activités d'un projet avec filtres optionnels statut et ressource responsable. Les charges (assignedWork, plannedWork, realWork, leftWork) sont en JOURS (j), jamais en heures.")
     async def list_activities(project_id: Annotated[Id, IdField], status_id: Id | None = None, resource_id: Id | None = None) -> Any:
         criteria = [SearchCriterion("idProject", project_id)]
         if status_id is not None:
@@ -30,7 +30,7 @@ def register_activity_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
     async def update_activity(id: Annotated[Id, IdField], updates: dict[str, Any]) -> Any:
         return await safe(client.update("Activity", {"id": id, **updates}))
 
-    @mcp.tool(description="Récupérer les données Gantt d'un projet: activités, jalons et dépendances si disponibles.")
+    @mcp.tool(description="Récupérer les données Gantt d'un projet: activités, jalons et dépendances si disponibles. Charges/travail en JOURS (j), jamais en heures.")
     async def get_gantt_data(project_id: Annotated[Id, IdField]) -> Any:
         async def run() -> dict[str, Any]:
             return {
@@ -45,7 +45,7 @@ def register_activity_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
         payload = merge_extra({"idActivityPredecessor": predecessor_activity_id, "idActivitySuccessor": successor_activity_id, "dependencyType": dependency_type}, extra)
         return await safe(client.create("Dependency", payload))
 
-    @mcp.tool(description="Snapshot planning complet: activités, jalons, affectations et dépendances d'un projet.")
+    @mcp.tool(description="Snapshot planning complet: activités, jalons, affectations et dépendances d'un projet. Charges/travail en JOURS (j), jamais en heures.")
     async def get_project_planning_snapshot(project_id: Annotated[Id, IdField]) -> Any:
         async def run() -> dict[str, Any]:
             return {
