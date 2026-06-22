@@ -12,7 +12,7 @@ from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe
 def register_project_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
     """Register project-related MCP tools."""
 
-    @mcp.tool(description="Lister tous les projets ProjeQtOr, avec filtres optionnels statut et type appliqués côté serveur si possible.")
+    @mcp.tool(description="Lister tous les projets ProjeQtOr, avec filtres optionnels statut et type appliqués côté serveur si possible. Les champs de charge/travail (assignedWork, plannedWork, realWork, leftWork) sont en JOURS (j), jamais en heures.")
     async def list_projects(status_id: Annotated[Id | None, Field(description="Filtre idStatus optionnel")] = None, type_id: Annotated[Id | None, Field(description="Filtre idProjectType optionnel")] = None) -> Any:
         criteria = []
         if status_id is not None:
@@ -21,7 +21,7 @@ def register_project_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
             criteria.append(SearchCriterion("idProjectType", type_id))
         return await safe(client.search("Project", criteria) if criteria else client.list_all("Project"))
 
-    @mcp.tool(description="Récupérer le détail complet d'un projet ProjeQtOr par identifiant.")
+    @mcp.tool(description="Récupérer le détail complet d'un projet ProjeQtOr par identifiant. Les champs de charge/travail (assignedWork, plannedWork, realWork, leftWork) sont en JOURS (j), jamais en heures.")
     async def get_project(id: Annotated[Id, IdField]) -> Any:
         return await safe(client.get_object("Project", id))
 
@@ -34,7 +34,7 @@ def register_project_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
     async def update_project(id: Annotated[Id, IdField], updates: Annotated[dict[str, Any], Field(description="Champs natifs ProjeQtOr à modifier")]) -> Any:
         return await safe(client.update("Project", {"id": id, **updates}))
 
-    @mcp.tool(description="Obtenir les données sources KPI d'un projet: projet, activités, travail, dépenses et budgets si disponibles.")
+    @mcp.tool(description="Obtenir les données sources KPI d'un projet: projet, activités, travail, dépenses et budgets si disponibles. Tout le travail/charge (work, assignedWork, plannedWork, realWork, leftWork) est en JOURS (j), jamais en heures.")
     async def get_project_kpis(id: Annotated[Id, IdField]) -> Any:
         async def run() -> dict[str, Any]:
             return {

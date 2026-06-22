@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Literal
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, HttpUrl, ValidationError, field_validator
+from pydantic import BaseModel, Field, HttpUrl, ValidationError, field_validator, model_validator
 
 
 class Transport(str, Enum):
@@ -19,9 +19,14 @@ class Settings(BaseModel):
     """Runtime configuration loaded from environment variables."""
 
     projeqtor_base_url: HttpUrl = Field(alias="PROJEQTOR_BASE_URL")
-    projeqtor_username: str = Field(min_length=1, alias="PROJEQTOR_USERNAME")
-    projeqtor_password: str = Field(min_length=1, alias="PROJEQTOR_PASSWORD")
-    projeqtor_api_key: str = Field(min_length=1, alias="PROJEQTOR_API_KEY")
+    # Auth: bearer token OR Basic (username + password). At least one required —
+    # enforced by `_check_auth` below. Bearer wins when both are present.
+    projeqtor_username: str | None = Field(default=None, alias="PROJEQTOR_USERNAME")
+    projeqtor_password: str | None = Field(default=None, alias="PROJEQTOR_PASSWORD")
+    projeqtor_bearer_token: str | None = Field(default=None, alias="PROJEQTOR_BEARER_TOKEN")
+    # AES key is only needed for write operations (PUT/POST/DELETE); reads work
+    # without it. Optional so a read-only/bearer setup needs no placeholder.
+    projeqtor_api_key: str | None = Field(default=None, alias="PROJEQTOR_API_KEY")
     projeqtor_aes_key_length: Literal[128, 192, 256] = Field(default=128, alias="PROJEQTOR_AES_KEY_LENGTH")
 
     mcp_transport: Transport = Field(default=Transport.STDIO, alias="MCP_TRANSPORT")
@@ -41,6 +46,24 @@ class Settings(BaseModel):
     @classmethod
     def normalize_log_level(cls, value: str) -> str:
         return str(value).upper()
+
+    @field_validator("projeqtor_aes_key_length", mode="before")
+    @classmethod
+    def coerce_aes_key_length(cls, value: object) -> object:
+        # Env vars arrive as strings; Literal[int] won't coerce "128" -> 128.
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value)
+        return value
+
+    @model_validator(mode="after")
+    def _check_auth(self) -> Settings:
+        has_basic = bool(self.projeqtor_username and self.projeqtor_password)
+        if not self.projeqtor_bearer_token and not has_basic:
+            raise ValueError(
+                "Authentication required: set PROJEQTOR_BEARER_TOKEN, "
+                "or PROJEQTOR_USERNAME + PROJEQTOR_PASSWORD."
+            )
+        return self
 
     @property
     def base_url(self) -> str:

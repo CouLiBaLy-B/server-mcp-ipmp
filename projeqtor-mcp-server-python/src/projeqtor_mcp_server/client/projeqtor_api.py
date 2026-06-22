@@ -36,7 +36,15 @@ class ProjeQtOrApiClient:
         self._settings = settings
         self._logger = logger
         self._api_base = f"{settings.base_url}/api"
-        self._auth = httpx.BasicAuth(settings.projeqtor_username, settings.projeqtor_password)
+        # Bearer token wins over Basic when both are configured.
+        if settings.projeqtor_bearer_token:
+            self._auth: httpx.Auth | None = None
+            self._auth_headers = {"Authorization": f"Bearer {settings.projeqtor_bearer_token}"}
+        else:
+            self._auth = httpx.BasicAuth(
+                settings.projeqtor_username or "", settings.projeqtor_password or ""
+            )
+            self._auth_headers = {}
 
     async def get_object(self, object_class: str, object_id: str | int) -> Any:
         """Retrieve one object by class and id."""
@@ -72,6 +80,11 @@ class ProjeQtOrApiClient:
         return await self._write("DELETE", object_class, data)
 
     async def _write(self, method: WriteMethod, object_class: str, data: dict[str, Any]) -> Any:
+        if not self._settings.projeqtor_api_key:
+            raise ProjeQtOrApiError(
+                "PROJEQTOR_API_KEY is required for write operations (AES-CTR encryption).",
+                retryable=False,
+            )
         encrypted = encrypt_aes_ctr(
             json.dumps(data, ensure_ascii=False, separators=(",", ":")),
             self._settings.projeqtor_api_key,
@@ -91,7 +104,7 @@ class ProjeQtOrApiClient:
                         method,
                         url,
                         json=json_body,
-                        headers={"Accept": "application/json"},
+                        headers={"Accept": "application/json", **self._auth_headers},
                     )
                 payload = _decode_response(response)
                 if response.is_error:
