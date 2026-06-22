@@ -1,27 +1,22 @@
-import { createCipheriv, createDecipheriv } from 'node:crypto';
-import type { EnvConfig } from '../config.js';
+import { createCipheriv, createHash, randomBytes } from "node:crypto";
 
-function deriveKey(apiKey: string, keyLength: EnvConfig['PROJEQTOR_AES_KEY_LENGTH']): Buffer {
-  const keyBytes = keyLength === '128' ? 16 : keyLength === '192' ? 24 : 32;
-  const buffer = Buffer.from(apiKey, 'utf-8');
-  if (buffer.length < keyBytes) return Buffer.concat([buffer, Buffer.alloc(keyBytes - buffer.length)]);
-  return buffer.slice(0, keyBytes);
+export type AesKeyLength = 128 | 192 | 256;
+
+function deriveKey(apiKey: string, bits: AesKeyLength): Buffer {
+  const bytes = bits / 8;
+  // ProjeQtOr API keys are user supplied strings. Hashing gives deterministic key material
+  // with the exact size expected by AES-CTR while avoiding raw key length assumptions.
+  return createHash("sha256").update(apiKey, "utf8").digest().subarray(0, bytes);
 }
 
-export function encryptPayload(data: unknown, config: EnvConfig): { encrypted: string; iv: string } {
-  const json = JSON.stringify(data);
-  const key = deriveKey(config.PROJEQTOR_API_KEY, config.PROJEQTOR_AES_KEY_LENGTH);
-  const iv = Buffer.from(crypto.getRandomValues(new Uint8Array(16)));
-  const cipher = createCipheriv('aes-' + config.PROJEQTOR_AES_KEY_LENGTH + '-ctr', key, iv);
-  const encrypted = Buffer.concat([cipher.update(json, 'utf-8'), cipher.final()]);
-  return { encrypted: encrypted.toString('base64'), iv: iv.toString('hex') };
-}
-
-export function decryptPayload(encryptedBase64: string, ivHex: string, config: EnvConfig): unknown {
-  const key = deriveKey(config.PROJEQTOR_API_KEY, config.PROJEQTOR_AES_KEY_LENGTH);
-  const iv = Buffer.from(ivHex, 'hex');
-  const encrypted = Buffer.from(encryptedBase64, 'base64');
-  const decipher = createDecipheriv('aes-' + config.PROJEQTOR_AES_KEY_LENGTH + '-ctr', key, iv);
-  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  return JSON.parse(decrypted.toString('utf-8'));
+/**
+ * Encrypts a UTF-8 payload using AES-CTR. The returned format is base64(iv):base64(ciphertext).
+ * If your ProjeQtOr instance/plugin expects another envelope, adapt only this function.
+ */
+export function encryptAesCtr(plainText: string, apiKey: string, bits: AesKeyLength): string {
+  const iv = randomBytes(16);
+  const key = deriveKey(apiKey, bits);
+  const cipher = createCipheriv(`aes-${bits}-ctr`, key, iv);
+  const encrypted = Buffer.concat([cipher.update(plainText, "utf8"), cipher.final()]);
+  return `${iv.toString("base64")}:${encrypted.toString("base64")}`;
 }

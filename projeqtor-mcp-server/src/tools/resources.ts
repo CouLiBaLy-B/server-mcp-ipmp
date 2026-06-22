@@ -1,72 +1,42 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
-import type { ProjeqtorApiClient } from '../client/projeqtor-api.js';
-import type { Logger } from '../config.js';
-import { withErrorHandling } from '../utils/error-handler.js';
-import { resourceSchema, assignmentSchema } from '../schemas/projeqtor-types.js';
+import { z } from "zod";
+import { IdSchema, JsonObjectSchema, DateSchema } from "../schemas/projeqtor-types.js";
+import { safeTool } from "../utils/error-handler.js";
+import { type ToolContext } from "./common.js";
 
-export function registerResourceTools(server: McpServer, client: ProjeqtorApiClient, log: Logger) {
-  server.tool(
-    'list_resources',
-    'List all human resources (team members) available in ProjeQtOr. Filter by type, active status, or profile. Returns resource details including name, email, role, and cost rate.',
-    {
-      type: z.string().optional().describe('Filter by resource type (e.g., "1"=employee, "2"=contractor)'),
-      isActive: z.boolean().optional().describe('Filter by active status'),
-      profile: z.string().optional().describe('Filter by profile/role ID'),
-    },
-    withErrorHandling(async ({ type, isActive, profile }) => {
-      const params: Record<string, string> = {};
-      if (type) params.resourceType = type;
-      if (isActive !== undefined) params.isActive = isActive ? '1' : '0';
-      if (profile) params.profile = profile;
-      const resources = await client.getAll('Resource', Object.keys(params).length > 0 ? params : undefined);
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ count: (resources as Array<unknown>).length, resources }, null, 2) }] };
-    }, 'list_resources'),
-  );
+export function registerResourceTools(server: any, ctx: ToolContext): void {
+  server.registerTool("list_resources", {
+    title: "List resources",
+    description: "List ProjeQtOr Resource objects, optionally only active resources when the isResource/isContact fields are present.",
+    inputSchema: { activeOnly: z.boolean().default(true).describe("Filter out inactive resources when data exposes idle flag") }
+  }, (a: any) => safeTool(async () => {
+    const data = await ctx.client.listAll<any>("Resource");
+    const arr = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : undefined;
+    return a.activeOnly && arr ? arr.filter((r: any) => r.idle !== "1" && r.isResource !== "0") : data;
+  }));
 
-  server.tool(
-    'assign_resource',
-    'Assign a resource (team member) to an activity or project. Specify the resource ID, activity ID, and optionally the amount of work assigned and the assignment dates.',
-    {
-      idResource: z.string().describe('Resource/team member ID'),
-      idActivity: z.string().describe('Activity/task ID to assign to'),
-      assignedWork: z.number().optional().describe('Amount of work to assign (in hours)'),
-      startDate: z.string().optional().describe('Assignment start date (YYYY-MM-DD)'),
-      endDate: z.string().optional().describe('Assignment end date (YYYY-MM-DD)'),
-    },
-    withErrorHandling(async (args) => {
-      const data = assignmentSchema.parse(args);
-      const result = await client.create('Assignment', data);
-      return { content: [{ type: 'text' as const, text: `Resource assigned successfully:\n${JSON.stringify(result, null, 2)}` }] };
-    }, 'assign_resource'),
-  );
+  server.registerTool("assign_resource", {
+    title: "Assign resource to activity",
+    description: "Create an Assignment linking a resource to an activity with optional planned work/rate. Write payload is AES-CTR encrypted.",
+    inputSchema: { activityId: IdSchema, resourceId: IdSchema, assignedWork: z.number().nonnegative().optional(), rate: z.number().nonnegative().optional(), extra: JsonObjectSchema.optional() }
+  }, (a: any) => safeTool(() => ctx.client.create("Assignment", { idActivity: a.activityId, idResource: a.resourceId, assignedWork: a.assignedWork, rate: a.rate, ...(a.extra ?? {}) })));
 
-  server.tool(
-    'get_resource_workload',
-    'Get the workload and capacity information for a specific resource over a time period. Shows assigned work, actual work done, remaining capacity, and any overallocation issues.',
-    {
-      idResource: z.string().describe('Resource/team member ID'),
-      startDate: z.string().describe('Start date for the period (YYYY-MM-DD)'),
-      endDate: z.string().describe('End date for the period (YYYY-MM-DD)'),
-    },
-    withErrorHandling(async ({ idResource, startDate, endDate }) => {
-      const [resource, assignments, works] = await Promise.all([
-        client.getById('Resource', idResource),
-        client.getAll('Assignment', { idResource }),
-        client.getAll('Work', { idResource, startDate: startDate.replace(/-/g, ''), endDate: endDate.replace(/-/g, '') }),
-      ]);
-      const r = resource as Record<string, unknown>;
-      const asgn = assignments as Array<Record<string, unknown>>;
-      const wk = works as Array<Record<string, unknown>>;
-      const workload = {
-        resource: r ?? { id: idResource },
-        period: { startDate, endDate },
-        assignments: asgn.length,
-        workEntries: wk.length,
-        totalAssignedWork: asgn.reduce((sum, a) => sum + Number(a.assignedWork ?? a.work ?? 0), 0),
-        totalWorkDone: wk.reduce((sum, w) => sum + Number(w.work ?? w.realWork ?? 0), 0),
-      };
-      return { content: [{ type: 'text' as const, text: JSON.stringify(workload, null, 2) }] };
-    }, 'get_resource_workload'),
-  );
+  server.registerTool("get_resource_workload", {
+    title: "Get resource workload",
+    description: "Return assignments and work logs for a resource over a period so the LLM can analyze load/capacity.",
+    inputSchema: { resourceId: IdSchema, from: DateSchema, to: DateSchema }
+  }, (a: any) => safeTool(async () => ({
+    resource: await ctx.client.getObject("Resource", a.resourceId),
+    assignments: await ctx.client.search("Assignment", [{ field: "idResource", operator: "=", value: a.resourceId }]),
+    work: await ctx.client.search("Work", [
+      { field: "idResource", operator: "=", value: a.resourceId },
+      { field: "workDate", operator: ">=", value: a.from },
+      { field: "workDate", operator: "<=", value: a.to }
+    ])
+  })));
+
+  server.registerTool("log_work", {
+    title: "Log work/time entry",
+    description: "Create a Work time entry for a resource on an activity. Use this for timesheet entry. Write payload is AES-CTR encrypted.",
+    inputSchema: { activityId: IdSchema, resourceId: IdSchema, workDate: DateSchema, work: z.number().positive().describe("Worked amount, usually in days"), comment: z.string().optional(), extra: JsonObjectSchema.optional() }
+  }, (a: any) => safeTool(() => ctx.client.create("Work", { idActivity: a.activityId, idResource: a.resourceId, workDate: a.workDate, work: a.work, comment: a.comment, ...(a.extra ?? {}) })));
 }

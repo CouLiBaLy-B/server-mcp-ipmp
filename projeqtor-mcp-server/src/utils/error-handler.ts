@@ -1,34 +1,54 @@
-export class McpToolError extends Error {
-  public readonly code: string;
-  public readonly retryable: boolean;
-  constructor(message: string, { code = 'TOOL_ERROR', retryable = false, cause }: { code?: string; retryable?: boolean; cause?: Error } = {}) {
+export class ProjeQtOrApiError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly details?: unknown,
+    readonly retryable = false
+  ) {
     super(message);
-    this.name = 'McpToolError';
-    this.code = code;
-    this.retryable = retryable;
-    if (cause) this.cause = cause;
-  }
-  toMcpResult(): { content: Array<{ type: 'text'; text: string }>; isError: true } {
-    return {
-      content: [{ type: 'text' as const, text: JSON.stringify({ error: this.message, code: this.code }) }],
-      isError: true,
-    };
+    this.name = "ProjeQtOrApiError";
   }
 }
 
-export function withErrorHandling<TArgs extends unknown[], TReturn>(
-  fn: (...args: TArgs) => Promise<TReturn>,
-  context: string,
-): (...args: TArgs) => Promise<TReturn> {
-  return async (...args: TArgs): Promise<TReturn> => {
-    try {
-      return await fn(...args);
-    } catch (err) {
-      if (err instanceof McpToolError) throw err;
-      throw new McpToolError(`${context} failed: ${err instanceof Error ? err.message : String(err)}`, {
-        code: 'INTERNAL_ERROR',
-        cause: err instanceof Error ? err : undefined,
-      });
-    }
+export class ValidationError extends Error {
+  constructor(message: string, readonly details?: unknown) {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
+/** Converts unknown exceptions to safe, LLM-actionable MCP text. */
+export function formatError(error: unknown): string {
+  if (error instanceof ProjeQtOrApiError) {
+    const hint = error.retryable ? " The request may be retried later." : " Check the input, object permissions or ProjeQtOr API availability.";
+    return `ProjeQtOr API error${error.status ? ` (${error.status})` : ""}: ${error.message}.${hint}`;
+  }
+  if (error instanceof ValidationError) {
+    return `Validation error: ${error.message}`;
+  }
+  if (error instanceof Error) {
+    return `Unexpected error: ${error.message}`;
+  }
+  return "Unexpected error: unknown failure";
+}
+
+export function mcpText(data: unknown) {
+  return {
+    content: [{ type: "text" as const, text: typeof data === "string" ? data : JSON.stringify(data, null, 2) }]
   };
+}
+
+export function mcpError(error: unknown) {
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text: formatError(error) }]
+  };
+}
+
+export async function safeTool<T>(fn: () => Promise<T> | T) {
+  try {
+    return mcpText(await fn());
+  } catch (e) {
+    return mcpError(e);
+  }
 }

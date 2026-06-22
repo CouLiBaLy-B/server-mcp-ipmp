@@ -1,34 +1,47 @@
 {
   "name": "projeqtor-mcp-server",
   "version": "1.0.0",
-  "description": "MCP server for ProjeQtOr",
-  "license": "MIT",
+  "description": "Production-ready Model Context Protocol server for ProjeQtOr REST API",
   "type": "module",
+  "main": "build/index.js",
   "bin": {
-    "projeqtor-mcp": "./build/index.js"
+    "projeqtor-mcp-server": "build/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "start": "node build/index.js",
-    "start:http": "MCP_TRANSPORT=http node build/index.js",
-    "dev": "tsx watch src/index.ts",
-    "dev:http": "MCP_TRANSPORT=http tsx watch src/index.ts",
-    "test": "vitest run",
-    "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "zod": "^3.24.2"
-  },
-  "devDependencies": {
-    "@types/node": "^22.13.0",
-    "eslint": "^9.20.0",
-    "tsx": "^4.19.3",
-    "typescript": "^5.7.3",
-    "vitest": "^3.0.5"
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc -p tsconfig.json --noEmit"
   },
   "engines": {
-    "node": ">=18"
-  }
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.9"
+  },
+  "files": [
+    "build",
+    "README.md",
+    ".env.example"
+  ],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "projeqtor",
+    "project-management"
+  ],
+  "license": "MIT"
 }

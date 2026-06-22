@@ -1,31 +1,21 @@
-export function toProjeqtorDate(date: Date): string {
-  const pad = (n: number, size = 2) => n.toString().padStart(size, '0');
-  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+/** Formats a Date as ProjeQtOr timestamp YYYYMMDDHHMMSS in local/UTC Date fields. */
+export function formatProjeqtorTimestamp(date: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}${p(date.getMonth() + 1)}${p(date.getDate())}${p(date.getHours())}${p(date.getMinutes())}${p(date.getSeconds())}`;
 }
-export function fromProjeqtorDate(dateStr: string): Date {
-  if (dateStr.length < 14) throw new Error(`Invalid ProjeQtOr date format: ${dateStr}`);
-  return new Date(
-    parseInt(dateStr.substring(0, 4), 10),
-    parseInt(dateStr.substring(4, 6), 10) - 1,
-    parseInt(dateStr.substring(6, 8), 10),
-    parseInt(dateStr.substring(8, 10), 10),
-    parseInt(dateStr.substring(10, 12), 10),
-    parseInt(dateStr.substring(12, 14), 10),
-  );
+
+export function parseDateInput(input: string | Date): Date {
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid date: ${input}`);
+  return date;
 }
-export function daysAgo(days: number): string {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return toProjeqtorDate(date);
+
+export function daysAgo(days: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d;
 }
-export function now(): string {
-  return toProjeqtorDate(new Date());
-}
-export function daysBetween(startDate: string, endDate: string): number {
-  const start = fromProjeqtorDate(startDate);
-  const end = fromProjeqtorDate(endDate);
-  return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
-}
-export function getDateRange(daysBack: number): { from: string; to: string } {
-  return { from: daysAgo(daysBack), to: now() };
+
+export function toProjeqtorDate(date: string | Date): string {
+  return parseDateInput(date).toISOString().slice(0, 10);
 }

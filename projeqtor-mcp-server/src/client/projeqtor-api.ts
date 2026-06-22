@@ -1,150 +1,121 @@
-import { URL } from 'node:url';
-import type { EnvConfig, Logger } from '../config.js';
-import { encryptPayload } from './aes-ctr.js';
-import { McpToolError } from '../utils/error-handler.js';
+import type { AppConfig } from "../config.js";
+import { encryptAesCtr } from "./aes-ctr.js";
+import { ProjeQtOrApiError } from "../utils/error-handler.js";
+import type { Logger } from "../utils/logger.js";
 
-export interface ProjeqtorResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  errors?: string[];
+export type ObjectClass = string;
+export type WriteMethod = "PUT" | "POST" | "DELETE";
+export interface SearchCriterion { field: string; operator?: string; value: string | number | boolean; }
+
+export class ProjeQtOrApiClient {
+  private readonly apiBase: string;
+  private readonly authHeader: string;
+
+  constructor(private readonly config: AppConfig, private readonly logger: Logger) {
+    this.apiBase = `${config.PROJEQTOR_BASE_URL}/api`;
+    this.authHeader = `Basic ${Buffer.from(`${config.PROJEQTOR_USERNAME}:${config.PROJEQTOR_PASSWORD}`).toString("base64")}`;
+  }
+
+  /** Retrieves an object by ProjeQtOr class and id. */
+  getObject<T = unknown>(objectClass: ObjectClass, id: string | number): Promise<T> {
+    return this.request<T>("GET", `/${encodeURIComponent(objectClass)}/${encodeURIComponent(String(id))}`);
+  }
+
+  /** Lists all objects of a ProjeQtOr class. */
+  listAll<T = unknown>(objectClass: ObjectClass): Promise<T> {
+    return this.request<T>("GET", `/${encodeURIComponent(objectClass)}/all`);
+  }
+
+  /** Retrieves objects using a saved ProjeQtOr filter id. */
+  filter<T = unknown>(objectClass: ObjectClass, filterId: string | number): Promise<T> {
+    return this.request<T>("GET", `/${encodeURIComponent(objectClass)}/filter/${encodeURIComponent(String(filterId))}`);
+  }
+
+  /** Searches objects. Criteria are converted to field:operator:value URL path segments. */
+  search<T = unknown>(objectClass: ObjectClass, criteria: SearchCriterion[]): Promise<T> {
+    const segments = criteria.map((c) => encodeURIComponent(`${c.field}:${c.operator ?? "= "}:${c.value}`.replace("= :", "=:")));
+    return this.request<T>("GET", `/${encodeURIComponent(objectClass)}/search/${segments.join("/")}`);
+  }
+
+  /** Retrieves objects updated between ProjeQtOr timestamps YYYYMMDDHHMMSS. */
+  updated<T = unknown>(objectClass: ObjectClass, from: string, to: string): Promise<T> {
+    return this.request<T>("GET", `/${encodeURIComponent(objectClass)}/updated/${from}/${to}`);
+  }
+
+  /** Creates an object. Body is AES-CTR encrypted as required by ProjeQtOr writes. */
+  create<T = unknown>(objectClass: ObjectClass, data: Record<string, unknown>): Promise<T> {
+    return this.write<T>("PUT", objectClass, data);
+  }
+
+  /** Updates an object. Body is AES-CTR encrypted as required by ProjeQtOr writes. */
+  update<T = unknown>(objectClass: ObjectClass, data: Record<string, unknown>): Promise<T> {
+    return this.write<T>("POST", objectClass, data);
+  }
+
+  /** Deletes an object by sending an encrypted JSON payload, usually including id. */
+  delete<T = unknown>(objectClass: ObjectClass, data: Record<string, unknown>): Promise<T> {
+    return this.write<T>("DELETE", objectClass, data);
+  }
+
+  private write<T>(method: WriteMethod, objectClass: ObjectClass, data: Record<string, unknown>): Promise<T> {
+    const json = JSON.stringify(data);
+    const encrypted = encryptAesCtr(json, this.config.PROJEQTOR_API_KEY, this.config.PROJEQTOR_AES_KEY_LENGTH as 128 | 192 | 256);
+    // Common ProjeQtOr API integrations expect an encrypted "data" field.
+    return this.request<T>(method, `/${encodeURIComponent(objectClass)}`, { data: encrypted });
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    const url = `${this.apiBase}${path}`;
+    let attempt = 0;
+    let lastError: unknown;
+    while (attempt <= this.config.PROJEQTOR_RETRY_ATTEMPTS) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), this.config.PROJEQTOR_TIMEOUT_MS);
+        const response = await fetch(url, {
+          method,
+          headers: {
+            Authorization: this.authHeader,
+            Accept: "application/json",
+            ...(body === undefined ? {} : { "Content-Type": "application/json" })
+          },
+          body: body === undefined ? undefined : JSON.stringify(body),
+          signal: controller.signal
+        }).finally(() => clearTimeout(timeout));
+
+        const text = await response.text();
+        const parsed = text ? safeJson(text) : null;
+        if (!response.ok) {
+          const retryable = response.status === 429 || response.status >= 500;
+          throw new ProjeQtOrApiError(extractApiMessage(parsed) ?? response.statusText, response.status, parsed, retryable);
+        }
+        return parsed as T;
+      } catch (e) {
+        lastError = e;
+        const retryable = e instanceof ProjeQtOrApiError ? e.retryable : e instanceof Error && e.name === "AbortError";
+        if (!retryable || attempt >= this.config.PROJEQTOR_RETRY_ATTEMPTS) break;
+        const delay = this.config.PROJEQTOR_RETRY_BASE_DELAY_MS * Math.pow(2, attempt) + Math.floor(Math.random() * 100);
+        this.logger.warn("Retrying ProjeQtOr API request", { method, path, attempt: attempt + 1, delay });
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        attempt += 1;
+      }
+    }
+    if (lastError instanceof ProjeQtOrApiError) throw lastError;
+    if (lastError instanceof Error) throw new ProjeQtOrApiError(lastError.message, undefined, undefined, true);
+    throw new ProjeQtOrApiError("Unknown API failure", undefined, undefined, true);
+  }
 }
 
-export class ProjeqtorApiClient {
-  private readonly baseUrl: string;
-  private readonly authHeader: string;
-  private readonly timeoutMs: number;
-  private readonly maxRetries: number;
-  private readonly log: Logger;
-  private readonly config: EnvConfig;
+function safeJson(text: string): unknown {
+  try { return JSON.parse(text); } catch { return text; }
+}
 
-  constructor(config: EnvConfig, logger: Logger) {
-    this.config = config;
-    this.baseUrl = config.PROJEQTOR_BASE_URL.replace(/\/+$/, '');
-    const creds = Buffer.from(`${config.PROJEQTOR_USERNAME}:${config.PROJEQTOR_PASSWORD}`).toString('base64');
-    this.authHeader = `Basic ${creds}`;
-    this.timeoutMs = config.REQUEST_TIMEOUT_MS;
-    this.maxRetries = config.MAX_RETRIES;
-    this.log = logger;
-  }
-
-  async getById<T = unknown>(objectClass: string, id: string | number): Promise<T> {
-    return this.fetchJson<T>(`${objectClass}/${id}`);
-  }
-
-  async getAll<T = unknown>(objectClass: string, params?: Record<string, string>): Promise<T[]> {
-    return this.fetchJson<T[]>(`all/${objectClass}`, { query: params });
-  }
-
-  async search<T = unknown>(objectClass: string, criteria: string[]): Promise<T[]> {
-    const searchPath = criteria.map(encodeURIComponent).join('/');
-    return this.fetchJson<T[]>(`search/${objectClass}/${searchPath}`);
-  }
-
-  async getUpdated<T = unknown>(objectClass: string, from: string, to: string): Promise<T[]> {
-    return this.fetchJson<T[]>(`updated/${objectClass}/${from}/${to}`);
-  }
-
-  async getFiltered<T = unknown>(objectClass: string, filterId: string): Promise<T[]> {
-    return this.fetchJson<T[]>(`filter/${objectClass}/${filterId}`);
-  }
-
-  async create<T = unknown>(objectClass: string, data: Record<string, unknown>): Promise<T> {
-    return this.writeRequest<T>('PUT', objectClass, data);
-  }
-
-  async update<T = unknown>(objectClass: string, data: Record<string, unknown>): Promise<T> {
-    return this.writeRequest<T>('POST', objectClass, data);
-  }
-
-  async delete(objectClass: string, id: string | number): Promise<void> {
-    await this.writeRequest<void>('DELETE', objectClass, { id: String(id) });
-  }
-
-  private async fetchJson<T>(path: string, opts?: { query?: Record<string, string> }): Promise<T> {
-    const url = new URL(`api/${path}`, this.baseUrl);
-    if (opts?.query) {
-      for (const [k, v] of Object.entries(opts.query)) {
-        url.searchParams.set(k, v);
-      }
+function extractApiMessage(value: unknown): string | undefined {
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    for (const k of ["message", "error", "errorMessage", "result"]) {
+      if (typeof obj[k] === "string") return obj[k] as string;
     }
-    return this.withRetry(async () => {
-      this.log.debug('GET', { url: url.toString() });
-      const res = await fetch(url.toString(), {
-        method: 'GET',
-        headers: this.getHeaders(),
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new McpToolError(`HTTP ${res.status} from ProjeQtOr: ${body.slice(0, 500)}`, {
-          code: 'HTTP_ERROR',
-          retryable: res.status >= 500,
-        });
-      }
-      const json = (await res.json()) as ProjeqtorResponse<T>;
-      if (!json.success && json.message) {
-        throw new McpToolError(`ProjeQtOr API error: ${json.message}`, { code: 'API_ERROR' });
-      }
-      return (json.data ?? json) as T;
-    });
   }
-
-  private async writeRequest<T>(
-    method: 'PUT' | 'POST' | 'DELETE',
-    objectClass: string,
-    data: Record<string, unknown>,
-  ): Promise<T> {
-    const { encrypted, iv } = encryptPayload(data, this.config);
-    const url = new URL(`api/${objectClass}`, this.baseUrl);
-    return this.withRetry(async () => {
-      this.log.debug(`${method} ${objectClass}`, { iv });
-      const res = await fetch(url.toString(), {
-        method,
-        headers: {
-          ...this.getHeaders(),
-          'X-ENCRYPTION-IV': iv,
-          'Content-Type': 'application/json',
-        },
-        body: encrypted,
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        throw new McpToolError(`HTTP ${res.status} from ProjeQtOr: ${body.slice(0, 500)}`, {
-          code: 'HTTP_ERROR',
-          retryable: res.status >= 500,
-        });
-      }
-      const json = (await res.json()) as ProjeqtorResponse<T>;
-      if (!json.success && json.message) {
-        throw new McpToolError(`ProjeQtOr API error: ${json.message}`, { code: 'API_ERROR' });
-      }
-      return (json.data ?? json) as T;
-    });
-  }
-
-  private getHeaders(): Record<string, string> {
-    return { Authorization: this.authHeader, Accept: 'application/json' };
-  }
-
-  private async withRetry<T>(fn: () => Promise<T>): Promise<T> {
-    let lastError: Error | null = null;
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        return await fn();
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err));
-        if (lastError instanceof McpToolError && !lastError.message.includes('retryable')) {
-          // Non-retryable error, but we still continue for retry logic
-        }
-        const delay = Math.min(1000 * Math.pow(2, attempt), 30000);
-        this.log.warn(`Retry attempt ${attempt + 1}/${this.maxRetries} after ${delay}ms`, {
-          error: lastError.message,
-        });
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-    throw lastError ?? new Error('Unknown retry failure');
-  }
+  return typeof value === "string" ? value : undefined;
 }
