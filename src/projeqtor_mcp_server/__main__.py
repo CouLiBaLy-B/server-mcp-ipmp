@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import sys
 
-from src.projeqtor_mcp_server.config import Transport, load_settings
-from src.projeqtor_mcp_server.server import create_server
-from src.projeqtor_mcp_server.utils.logger import configure_logging
+from projeqtor_mcp_server.config import Transport, load_settings
+from projeqtor_mcp_server.server import create_server
+from projeqtor_mcp_server.utils.logger import configure_logging
 
 
 def main() -> None:

@@ -1,8 +1,8 @@
 import asyncio
 
-from src.projeqtor_mcp_server.config import Settings
-from src.projeqtor_mcp_server.server import create_server
-from src.projeqtor_mcp_server.utils.logger import configure_logging
+from projeqtor_mcp_server.config import Settings
+from projeqtor_mcp_server.server import create_server
+from projeqtor_mcp_server.utils.logger import configure_logging
 
 
 def test_server_catalog_contains_required_items() -> None:

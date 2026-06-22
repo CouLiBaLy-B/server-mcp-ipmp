@@ -6,9 +6,9 @@ from typing import Any, Annotated
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
 
-from src.projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
-from src.projeqtor_mcp_server.tools.common import criteria_from_dicts, safe
-from src.projeqtor_mcp_server.utils.dates import days_ago, format_projeqtor_timestamp
+from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
+from projeqtor_mcp_server.tools.common import criteria_from_dicts, safe
+from projeqtor_mcp_server.utils.dates import days_ago, format_projeqtor_timestamp
 
 DEFAULT_CLASSES = ["Project", "Activity", "Ticket", "Milestone", "Risk", "Opportunity", "Action", "Issue", "Question", "Decision", "Meeting", "Resource", "Document", "Requirement", "TestCase", "TestSession"]
 
