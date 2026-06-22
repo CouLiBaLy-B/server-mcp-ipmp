@@ -1,0 +1,40 @@
+# Déploiement A : serveur MCP en streamable-HTTP derrière un proxy d'auth.
+# Les agents (Claude Code / Codex / deepagents) ne clonent rien : ils pointent
+# l'URL exposée par le gateway avec un header `Authorization: Bearer <GATE_TOKEN>`.
+#
+#   cp .env.example .env   # renseigner GATE_TOKEN + PROJEQTOR_*
+#   docker compose up -d --build
+#
+# Endpoint exposé : http://<host>:8080/mcp  (mettre derrière HTTPS en prod)
+
+services:
+  mcp:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      MCP_TRANSPORT: http
+      MCP_HTTP_HOST: 0.0.0.0
+      MCP_HTTP_PORT: "3000"
+      PROJEQTOR_BASE_URL: ${PROJEQTOR_BASE_URL}
+      PROJEQTOR_BEARER_TOKEN: ${PROJEQTOR_BEARER_TOKEN:-}
+      PROJEQTOR_USERNAME: ${PROJEQTOR_USERNAME:-}
+      PROJEQTOR_PASSWORD: ${PROJEQTOR_PASSWORD:-}
+      PROJEQTOR_API_KEY: ${PROJEQTOR_API_KEY:-}
+      PROJEQTOR_AES_KEY_LENGTH: ${PROJEQTOR_AES_KEY_LENGTH:-128}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    expose:
+      - "3000"          # interne uniquement, jamais publié directement
+    restart: unless-stopped
+
+  gateway:
+    image: caddy:2-alpine
+    depends_on:
+      - mcp
+    environment:
+      GATE_TOKEN: ${GATE_TOKEN}
+    ports:
+      - "8080:8080"     # le seul port exposé à l'extérieur
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped

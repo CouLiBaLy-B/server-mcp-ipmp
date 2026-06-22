@@ -1,0 +1,12 @@
+# Extrait à coller dans ~/.codex/config.toml — garder UN seul bloc selon le mode.
+
+# --- A : serveur HTTP distant, aucun clone ---
+[mcp_servers.projeqtor-remote]
+url = "https://ton-host:8080/mcp"
+http_headers = { Authorization = "Bearer GATE_TOKEN" }
+
+# --- B : exécution locale depuis GitHub via uvx, sans git clone manuel ---
+[mcp_servers.projeqtor-uvx]
+command = "uvx"
+args = ["--from", "git+https://github.com/CouLiBaLy-B/server-mcp-ipmp.git", "projeqtor-mcp-server-python"]
+env = { MCP_TRANSPORT = "stdio", PROJEQTOR_BASE_URL = "https://mon-instance.projeqtor.com", PROJEQTOR_BEARER_TOKEN = "...", PROJEQTOR_API_KEY = "...", PROJEQTOR_AES_KEY_LENGTH = "128" }
