@@ -1,0 +1,22 @@
+# Gateway d'authentification devant le serveur MCP.
+# Rejette toute requête sans `Authorization: Bearer <GATE_TOKEN>`, puis
+# relaie vers le service `mcp` interne (port 3000).
+#
+# Le GATE_TOKEN protège l'ENDPOINT MCP (auth agent -> serveur). Il est distinct
+# du PROJEQTOR_BEARER_TOKEN (auth serveur -> API ProjeQtOr).
+
+:8080 {
+	@unauthorized not header Authorization "Bearer {$GATE_TOKEN}"
+	respond @unauthorized "Unauthorized" 401
+
+	reverse_proxy mcp:3000
+
+	log {
+		output stdout
+		format console
+	}
+}
+
+# Prod : pour activer HTTPS automatique, remplacer `:8080` par ton domaine
+# (ex. `mcp.mondomaine.com`) et publier le port 443 dans docker-compose.
+# Caddy gère alors les certificats Let's Encrypt automatiquement.
