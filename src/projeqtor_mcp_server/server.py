@@ -4,21 +4,21 @@ import logging
 
 from mcp.server.fastmcp import FastMCP
 
-from src.projeqtor_mcp_server import __version__
-from src.projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient
-from src.projeqtor_mcp_server.config import Settings
-from src.projeqtor_mcp_server.prompts import (
+from projeqtor_mcp_server import __version__
+from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient
+from projeqtor_mcp_server.config import Settings
+from projeqtor_mcp_server.prompts import (
     register_project_status_report_prompt,
     register_resource_optimization_prompt,
     register_risk_analysis_prompt,
     register_sprint_review_prompt,
 )
-from src.projeqtor_mcp_server.resources import (
+from projeqtor_mcp_server.resources import (
     register_dashboard_resources,
     register_project_summary_resources,
     register_reference_resources,
 )
-from src.projeqtor_mcp_server.tools import (
+from projeqtor_mcp_server.tools import (
     register_activity_tools,
     register_document_tools,
     register_financial_tools,

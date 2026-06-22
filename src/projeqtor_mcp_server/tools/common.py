@@ -5,8 +5,8 @@ from typing import Any, TypeVar
 
 from pydantic import Field
 
-from src.projeqtor_mcp_server.client.projeqtor_api import SearchCriterion
-from src.projeqtor_mcp_server.utils.errors import format_error
+from projeqtor_mcp_server.client.projeqtor_api import SearchCriterion
+from projeqtor_mcp_server.utils.errors import format_error
 
 T = TypeVar("T")
 Id = str | int

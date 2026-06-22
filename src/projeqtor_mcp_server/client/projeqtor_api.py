@@ -10,9 +10,9 @@ from urllib.parse import quote
 
 import httpx
 
-from src.projeqtor_mcp_server.client.aes_ctr import encrypt_aes_ctr
-from src.projeqtor_mcp_server.config import Settings
-from src.projeqtor_mcp_server.utils.errors import ProjeQtOrApiError
+from projeqtor_mcp_server.client.aes_ctr import encrypt_aes_ctr
+from projeqtor_mcp_server.config import Settings
+from projeqtor_mcp_server.utils.errors import ProjeQtOrApiError
 
 WriteMethod = Literal["PUT", "POST", "DELETE"]
 

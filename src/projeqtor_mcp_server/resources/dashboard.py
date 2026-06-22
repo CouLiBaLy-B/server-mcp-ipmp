@@ -6,9 +6,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from src.projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
-from src.projeqtor_mcp_server.tools.common import safe
-from src.projeqtor_mcp_server.utils.dates import days_ago, format_projeqtor_timestamp
+from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
+from projeqtor_mcp_server.tools.common import safe
+from projeqtor_mcp_server.utils.dates import days_ago, format_projeqtor_timestamp
 
 
 def register_dashboard_resources(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
