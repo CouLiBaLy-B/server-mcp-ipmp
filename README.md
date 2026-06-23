@@ -81,8 +81,11 @@ Copier `.env.example` en `.env` ou fournir les variables via le client MCP :
 
 ```env
 PROJEQTOR_BASE_URL=https://mon-instance.projeqtor.com
+# Auth ProjeQtOr : bearer OU (username + password). Bearer gagne si les deux sont fournis.
+PROJEQTOR_BEARER_TOKEN=
 PROJEQTOR_USERNAME=api_user
 PROJEQTOR_PASSWORD=secret
+# Requis seulement pour les écritures (PUT/POST/DELETE) chiffrées AES.
 PROJEQTOR_API_KEY=ma_cle_api_aes
 PROJEQTOR_AES_KEY_LENGTH=128
 MCP_TRANSPORT=stdio
@@ -95,6 +98,7 @@ PROJEQTOR_RETRY_BASE_DELAY_SECONDS=0.3
 ```
 
 `PROJEQTOR_BASE_URL` peut être fourni avec ou sans `/api`; le serveur normalise l'URL.
+Au moins une auth est obligatoire : `PROJEQTOR_BEARER_TOKEN`, ou `PROJEQTOR_USERNAME` + `PROJEQTOR_PASSWORD`.
 
 ## Lancement
 
@@ -115,6 +119,73 @@ Endpoint MCP :
 ```text
 POST http://localhost:3000/mcp
 ```
+
+## Mise à disposition des agents (Claude Code / Codex / deepagents)
+
+Le serveur est un serveur MCP standard : il n'y a rien à réécrire pour chaque
+agent, seulement à le configurer. Deux modes, fichiers prêts dans
+[`clients/`](clients/) et [`deploy/`](deploy/).
+
+> ⚠️ **Sécurité** — Le transport HTTP n'a aucune auth MCP intégrée
+> (`stateless_http`). Quiconque atteint l'URL pilote ProjeQtOr avec les
+> credentials du serveur. Le mode A ci-dessous ajoute un gateway qui exige un
+> `GATE_TOKEN`. Ce `GATE_TOKEN` (auth agent → endpoint) est **distinct** du
+> `PROJEQTOR_BEARER_TOKEN` (auth serveur → API ProjeQtOr).
+
+### A — Serveur HTTP distant (aucun clone côté agent)
+
+Déployé une fois derrière un proxy d'auth ; les agents pointent l'URL.
+Les credentials ProjeQtOr restent côté serveur.
+
+```bash
+cd deploy
+cp .env.example .env        # renseigner GATE_TOKEN + PROJEQTOR_*
+docker compose up -d --build
+# endpoint exposé : http://<host>:8080/mcp  (mettre derrière HTTPS en prod)
+```
+
+Branchement des clients :
+
+```bash
+# Claude Code
+claude mcp add --transport http projeqtor https://ton-host:8080/mcp \
+  --header "Authorization: Bearer GATE_TOKEN"
+```
+
+```toml
+# Codex — ~/.codex/config.toml
+[mcp_servers.projeqtor]
+url = "https://ton-host:8080/mcp"
+http_headers = { Authorization = "Bearer GATE_TOKEN" }
+```
+
+```python
+# deepagents — cf. clients/deepagents/run_agent.py
+MultiServerMCPClient({"projeqtor": {
+    "transport": "streamable_http",
+    "url": "https://ton-host:8080/mcp",
+    "headers": {"Authorization": "Bearer GATE_TOKEN"},
+}})
+```
+
+### B — Exécution locale depuis GitHub (sans `git clone` manuel)
+
+`uvx` récupère et exécute le paquet directement depuis le dépôt (cache, pas de
+clone manuel). Chaque agent s'exécute en local et fournit ses credentials.
+
+```bash
+uvx --from git+https://github.com/CouLiBaLy-B/server-mcp-ipmp.git projeqtor-mcp-server-python
+```
+
+Configs prêtes : [`clients/claude-code/.mcp.json`](clients/claude-code/.mcp.json),
+[`clients/codex/config.toml`](clients/codex/config.toml),
+[`clients/deepagents/run_agent.py`](clients/deepagents/run_agent.py)
+(garder le bloc `*-uvx`). Dépôt privé → `uvx` utilise l'auth git locale (SSH/token).
+
+| Besoin | Mode |
+| --- | --- |
+| Serveur central, agents légers, credentials centralisés | **A (HTTP)** |
+| Pas de serveur à gérer, credentials par agent | **B (uvx git)** |
 
 ## Configuration Claude Desktop
 
