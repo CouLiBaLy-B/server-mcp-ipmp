@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field, HttpUrl, ValidationError, field_validator, model_validator
 
 
-class Transport(str, Enum):
+class Transport(str, Enum):  # noqa: UP042  # keep str+Enum for stable str() serialization
     """Supported MCP transports."""
 
     STDIO = "stdio"
@@ -30,7 +30,7 @@ class Settings(BaseModel):
     projeqtor_aes_key_length: Literal[128, 192, 256] = Field(default=128, alias="PROJEQTOR_AES_KEY_LENGTH")
 
     mcp_transport: Transport = Field(default=Transport.STDIO, alias="MCP_TRANSPORT")
-    mcp_http_host: str = Field(default="0.0.0.0", alias="MCP_HTTP_HOST")
+    mcp_http_host: str = Field(default="0.0.0.0", alias="MCP_HTTP_HOST")  # noqa: S104  # intentional bind for containerized server
     mcp_http_port: int = Field(default=3000, gt=0, alias="MCP_HTTP_PORT")
 
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = Field(

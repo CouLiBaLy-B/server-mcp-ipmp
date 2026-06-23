@@ -20,7 +20,7 @@ class JsonStderrFormatter(logging.Formatter):
             "message": record.getMessage(),
         }
         if hasattr(record, "meta"):
-            payload["meta"] = sanitize(getattr(record, "meta"))
+            payload["meta"] = sanitize(record.meta)
         if record.exc_info:
             payload["exception"] = record.exc_info[0].__name__ if record.exc_info[0] else "Exception"
         return json.dumps(payload, ensure_ascii=False)
