@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Annotated
+from typing import Annotated, Any
 
-from pydantic import Field
 from mcp.server.fastmcp import FastMCP
+from pydantic import Field
 
 from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
 from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe

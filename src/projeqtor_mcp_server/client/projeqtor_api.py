@@ -125,7 +125,7 @@ class ProjeQtOrApiClient:
 
             if attempt >= self._settings.projeqtor_retry_attempts:
                 break
-            delay = self._settings.projeqtor_retry_base_delay_seconds * (2**attempt) + random.random() / 10
+            delay = self._settings.projeqtor_retry_base_delay_seconds * (2**attempt) + random.random() / 10  # noqa: S311  # non-crypto retry jitter
             self._logger.warning("Retrying ProjeQtOr request", extra={"meta": {"method": method, "path": path, "attempt": attempt + 1, "delay": delay}})
             await asyncio.sleep(delay)
 
