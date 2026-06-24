@@ -187,6 +187,82 @@ Configs prêtes : [`clients/claude-code/.mcp.json`](clients/claude-code/.mcp.jso
 | Serveur central, agents légers, credentials centralisés | **A (HTTP)** |
 | Pas de serveur à gérer, credentials par agent | **B (uvx git)** |
 
+## Méthodes d'utilisation par client
+
+Chaque client a un fichier de config prêt dans [`clients/`](clients/). Choisir le
+mode **A** (HTTP distant) ou **B** (uvx local) selon le tableau ci-dessus, puis
+remplacer les placeholders (`ton-host`, `GATE_TOKEN`, `PROJEQTOR_*`, `...`).
+
+### Claude Code
+
+Fichier prêt : [`clients/claude-code/.mcp.json`](clients/claude-code/.mcp.json)
+(contient les deux blocs `projeqtor-remote` et `projeqtor-uvx`).
+
+**Option 1 — fichier projet.** Copier `.mcp.json` à la racine du projet, garder le
+bloc voulu, renseigner les valeurs. Claude Code le détecte au lancement.
+
+```bash
+cp clients/claude-code/.mcp.json ./.mcp.json
+# éditer ./.mcp.json puis lancer `claude` dans ce dossier
+```
+
+**Option 2 — via CLI.**
+
+```bash
+# Mode A (HTTP distant)
+claude mcp add --transport http projeqtor https://ton-host:8080/mcp \
+  --header "Authorization: Bearer GATE_TOKEN"
+
+# Mode B (uvx local)
+claude mcp add projeqtor \
+  --env MCP_TRANSPORT=stdio \
+  --env PROJEQTOR_BASE_URL=https://mon-instance.projeqtor.com \
+  --env PROJEQTOR_BEARER_TOKEN=... \
+  --env PROJEQTOR_API_KEY=... \
+  -- uvx --from git+https://github.com/CouLiBaLy-B/server-mcp-ipmp.git projeqtor-mcp-server-python
+```
+
+Vérifier : `claude mcp list`, ou la commande `/mcp` dans une session Claude Code.
+
+### Codex
+
+Fichier prêt : [`clients/codex/config.toml`](clients/codex/config.toml). Coller **un
+seul** bloc dans `~/.codex/config.toml`.
+
+```toml
+# Mode A — HTTP distant
+[mcp_servers.projeqtor]
+url = "https://ton-host:8080/mcp"
+http_headers = { Authorization = "Bearer GATE_TOKEN" }
+
+# Mode B — uvx local
+[mcp_servers.projeqtor]
+command = "uvx"
+args = ["--from", "git+https://github.com/CouLiBaLy-B/server-mcp-ipmp.git", "projeqtor-mcp-server-python"]
+env = { MCP_TRANSPORT = "stdio", PROJEQTOR_BASE_URL = "https://mon-instance.projeqtor.com", PROJEQTOR_BEARER_TOKEN = "...", PROJEQTOR_API_KEY = "...", PROJEQTOR_AES_KEY_LENGTH = "128" }
+```
+
+Relancer Codex ; les tools `projeqtor` apparaissent dans la liste MCP.
+
+### deepagents (LangChain)
+
+Script prêt : [`clients/deepagents/run_agent.py`](clients/deepagents/run_agent.py).
+
+```bash
+pip install deepagents langchain-mcp-adapters
+# éditer run_agent.py : choisir SERVER_REMOTE (A) ou SERVER_UVX (B)
+python clients/deepagents/run_agent.py
+```
+
+Le script charge les tools MCP, les convertit en `BaseTool` LangChain et lance un
+`create_deep_agent`. Adapter `model=` au provider voulu.
+
+### Claude Desktop / Cursor / VS Code Copilot
+
+Clients à transport `stdio`. Utiliser le bloc JSON ci-dessous (section
+[Configuration Claude Desktop](#configuration-claude-desktop)) en pointant soit le
+binaire local installé (`pip install -e .`), soit `uvx` (mode B) comme commande.
+
 ## Configuration Claude Desktop
 
 ```json

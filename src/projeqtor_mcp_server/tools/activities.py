@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from mcp.server.fastmcp import FastMCP
 
 from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
-from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe
+from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe, safe_list
 
 
 def register_activity_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
@@ -18,7 +18,7 @@ def register_activity_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
             criteria.append(SearchCriterion("idStatus", status_id))
         if resource_id is not None:
             criteria.append(SearchCriterion("idResource", resource_id))
-        return await safe(client.search("Activity", criteria))
+        return await safe_list("Activity", client.search("Activity", criteria))
 
     @mcp.tool(description="Créer une activité/tâche ProjeQtOr dans un projet. Payload chiffré AES-CTR.")
     async def create_activity(name: str, id_project: Id, id_activity_type: Id | None = None, id_status: Id | None = None, id_resource: Id | None = None, planned_start_date: str | None = None, planned_end_date: str | None = None, planned_work: float | None = None, description: str | None = None, extra: dict[str, Any] | None = None) -> Any:
@@ -33,9 +33,9 @@ def register_activity_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
     async def get_gantt_data(project_id: Annotated[Id, IdField]) -> Any:
         async def run() -> dict[str, Any]:
             return {
-                "activities": await client.search("Activity", [SearchCriterion("idProject", project_id)]),
-                "milestones": await safe(client.search("Milestone", [SearchCriterion("idProject", project_id)])),
-                "dependencies": await safe(client.search("Dependency", [SearchCriterion("idProject", project_id)])),
+                "activities": await safe_list("Activity", client.search("Activity", [SearchCriterion("idProject", project_id)])),
+                "milestones": await safe_list("Milestone", client.search("Milestone", [SearchCriterion("idProject", project_id)])),
+                "dependencies": await safe_list("Dependency", client.search("Dependency", [SearchCriterion("idProject", project_id)])),
             }
         return await safe(run())
 
@@ -48,9 +48,9 @@ def register_activity_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
     async def get_project_planning_snapshot(project_id: Annotated[Id, IdField]) -> Any:
         async def run() -> dict[str, Any]:
             return {
-                "activities": await client.search("Activity", [SearchCriterion("idProject", project_id)]),
-                "milestones": await safe(client.search("Milestone", [SearchCriterion("idProject", project_id)])),
-                "assignments": await safe(client.search("Assignment", [SearchCriterion("idProject", project_id)])),
-                "dependencies": await safe(client.search("Dependency", [SearchCriterion("idProject", project_id)])),
+                "activities": await safe_list("Activity", client.search("Activity", [SearchCriterion("idProject", project_id)])),
+                "milestones": await safe_list("Milestone", client.search("Milestone", [SearchCriterion("idProject", project_id)])),
+                "assignments": await safe_list("Assignment", client.search("Assignment", [SearchCriterion("idProject", project_id)])),
+                "dependencies": await safe_list("Dependency", client.search("Dependency", [SearchCriterion("idProject", project_id)])),
             }
         return await safe(run())

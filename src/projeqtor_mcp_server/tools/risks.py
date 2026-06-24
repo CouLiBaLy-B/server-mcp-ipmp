@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from mcp.server.fastmcp import FastMCP
 
 from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
-from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe
+from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe, safe_list
 
 
 def register_risk_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
@@ -16,7 +16,7 @@ def register_risk_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
         criteria = [SearchCriterion("idProject", project_id)]
         if status_id is not None:
             criteria.append(SearchCriterion("idStatus", status_id))
-        return await safe(client.search("Risk", criteria))
+        return await safe_list("Risk", client.search("Risk", criteria))
 
     @mcp.tool(description="Créer un risque avec impact/probabilité/criticité et plan de mitigation. Payload chiffré AES-CTR.")
     async def create_risk(name: str, id_project: Id, id_risk_type: Id | None = None, id_status: Id | None = None, impact: str | None = None, probability: str | None = None, criticality: str | None = None, mitigation_plan: str | None = None, extra: dict[str, Any] | None = None) -> Any:
@@ -28,4 +28,4 @@ def register_risk_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
         criteria = [SearchCriterion("idProject", project_id)]
         if status_id is not None:
             criteria.append(SearchCriterion("idStatus", status_id))
-        return await safe(client.search("Issue", criteria))
+        return await safe_list("Issue", client.search("Issue", criteria))

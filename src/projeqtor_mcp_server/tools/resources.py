@@ -5,20 +5,23 @@ from typing import Annotated, Any
 from mcp.server.fastmcp import FastMCP
 
 from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
-from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe
+from projeqtor_mcp_server.filters import project_items
+from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe, safe_list
 
 
 def register_resource_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
     """Register resource, assignment and timesheet tools."""
 
-    @mcp.tool(description="Lister les ressources disponibles, avec option pour masquer les ressources inactives si les champs existent.")
+    @mcp.tool(description="Lister les ressources. Par défaut (active_only=true) masque les ressources inactives (idle=1). Retourne toujours une liste de ressources projetée.")
     async def list_resources(active_only: bool = True) -> Any:
         async def run() -> Any:
             data = await client.list_all("Resource")
             rows = data if isinstance(data, list) else data.get("items") if isinstance(data, dict) else None
-            if active_only and isinstance(rows, list):
-                return [r for r in rows if str(r.get("idle", "0")) != "1" and str(r.get("isResource", "1")) != "0"]
-            return data
+            if not isinstance(rows, list):
+                return project_items("Resource", data)
+            if active_only:
+                rows = [r for r in rows if str(r.get("idle", "0")) != "1"]
+            return project_items("Resource", rows)
         return await safe(run())
 
     @mcp.tool(description="Affecter une ressource à une activité en créant une Assignment. Payload chiffré AES-CTR.")
@@ -31,8 +34,8 @@ def register_resource_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
         async def run() -> dict[str, Any]:
             return {
                 "resource": await client.get_object("Resource", resource_id),
-                "assignments": await client.search("Assignment", [SearchCriterion("idResource", resource_id)]),
-                "work": await client.search("Work", [SearchCriterion("idResource", resource_id), SearchCriterion("workDate", from_date, ">="), SearchCriterion("workDate", to_date, "<=")]),
+                "assignments": await safe_list("Assignment", client.search("Assignment", [SearchCriterion("idResource", resource_id)])),
+                "work": await safe_list("Work", client.search("Work", [SearchCriterion("idResource", resource_id), SearchCriterion("workDate", from_date, ">="), SearchCriterion("workDate", to_date, "<=")])),
             }
         return await safe(run())
 
@@ -43,4 +46,4 @@ def register_resource_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
 
     @mcp.tool(description="Consulter la feuille de temps Work d'une ressource sur une période.")
     async def get_timesheet(resource_id: Annotated[Id, IdField], from_date: str, to_date: str) -> Any:
-        return await safe(client.search("Work", [SearchCriterion("idResource", resource_id), SearchCriterion("workDate", from_date, ">="), SearchCriterion("workDate", to_date, "<=")]))
+        return await safe_list("Work", client.search("Work", [SearchCriterion("idResource", resource_id), SearchCriterion("workDate", from_date, ">="), SearchCriterion("workDate", to_date, "<=")]))
