@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
 from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
-from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe
+from projeqtor_mcp_server.tools.common import Id, IdField, merge_extra, safe, safe_list
 
 
 def register_project_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
@@ -19,7 +19,7 @@ def register_project_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
             criteria.append(SearchCriterion("idStatus", status_id))
         if type_id is not None:
             criteria.append(SearchCriterion("idProjectType", type_id))
-        return await safe(client.search("Project", criteria) if criteria else client.list_all("Project"))
+        return await safe_list("Project", client.search("Project", criteria) if criteria else client.list_all("Project"))
 
     @mcp.tool(description="Récupérer le détail complet d'un projet ProjeQtOr par identifiant. Les champs de charge/travail (assignedWork, plannedWork, realWork, leftWork) sont en JOURS (j), jamais en heures.")
     async def get_project(id: Annotated[Id, IdField]) -> Any:
@@ -39,8 +39,8 @@ def register_project_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
         async def run() -> dict[str, Any]:
             return {
                 "project": await client.get_object("Project", id),
-                "activities": await client.search("Activity", [SearchCriterion("idProject", id)]),
-                "work": await client.search("Work", [SearchCriterion("idProject", id)]),
+                "activities": await safe_list("Activity", client.search("Activity", [SearchCriterion("idProject", id)])),
+                "work": await safe_list("Work", client.search("Work", [SearchCriterion("idProject", id)])),
                 "expenses": await safe(client.search("Expense", [SearchCriterion("idProject", id)])),
                 "budget": await safe(client.search("Budget", [SearchCriterion("idProject", id)])),
             }

@@ -6,6 +6,7 @@ from typing import Any, TypeVar
 from pydantic import Field
 
 from projeqtor_mcp_server.client.projeqtor_api import SearchCriterion
+from projeqtor_mcp_server.filters import project_items
 from projeqtor_mcp_server.utils.errors import format_error
 
 T = TypeVar("T")
@@ -17,8 +18,17 @@ async def safe(coro: Awaitable[T]) -> T | dict[str, Any]:
     """Return tool result or a safe error payload, never a raw stack trace."""
     try:
         return await coro
-    except Exception as exc:  # noqa: BLE001 - MCP boundary: convert every exception to safe text
+    except Exception as exc:
         return {"error": format_error(exc)}
+
+
+async def safe_list(object_class: str, coro: Awaitable[Any]) -> Any:
+    """Run a list/search call safely, then project rows to LLM-sized fields.
+
+    Use for collection responses; keep plain `safe` for `get_*` detail tools
+    that must return the full object.
+    """
+    return project_items(object_class, await safe(coro))
 
 
 def criteria_from_dicts(criteria: list[dict[str, Any]]) -> list[SearchCriterion]:

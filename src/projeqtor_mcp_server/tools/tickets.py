@@ -6,7 +6,14 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import Field
 
 from projeqtor_mcp_server.client.projeqtor_api import ProjeQtOrApiClient, SearchCriterion
-from projeqtor_mcp_server.tools.common import Id, IdField, criteria_from_dicts, merge_extra, safe
+from projeqtor_mcp_server.tools.common import (
+    Id,
+    IdField,
+    criteria_from_dicts,
+    merge_extra,
+    safe,
+    safe_list,
+)
 
 
 def register_ticket_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
@@ -23,7 +30,7 @@ def register_ticket_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
             criteria.append(SearchCriterion("idPriority", priority_id))
         if resource_id is not None:
             criteria.append(SearchCriterion("idResource", resource_id))
-        return await safe(client.search("Ticket", criteria) if criteria else client.list_all("Ticket"))
+        return await safe_list("Ticket", client.search("Ticket", criteria) if criteria else client.list_all("Ticket"))
 
     @mcp.tool(description="Créer un ticket ProjeQtOr bug/support. Payload chiffré AES-CTR.")
     async def create_ticket(name: str, id_project: Id | None = None, id_ticket_type: Id | None = None, id_status: Id | None = None, id_priority: Id | None = None, id_resource: Id | None = None, description: str | None = None, extra: dict[str, Any] | None = None) -> Any:
@@ -36,4 +43,4 @@ def register_ticket_tools(mcp: FastMCP, client: ProjeQtOrApiClient) -> None:
 
     @mcp.tool(description="Recherche avancée de tickets via critères SQL-like: [{field, operator, value}].")
     async def search_tickets(criteria: Annotated[list[dict[str, Any]], Field(description="Critères: field, operator, value")]) -> Any:
-        return await safe(client.search("Ticket", criteria_from_dicts(criteria)))
+        return await safe_list("Ticket", client.search("Ticket", criteria_from_dicts(criteria)))
